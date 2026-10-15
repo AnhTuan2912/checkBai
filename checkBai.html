@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Theo dõi bài Tiến Lên</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#f8fafc;min-height:100vh}
+.app{max-width:600px;margin:auto;padding:14px 12px 28px}
+header{text-align:center;margin-bottom:12px}
+h1{font-size:22px;margin:4px 0 14px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#1e293b;border-radius:16px;padding:14px}
+.stat .num{font-size:34px;font-weight:800;line-height:1}
+.stat .label{font-size:13px;color:#94a3b8;margin-top:6px}
+.progress{height:8px;background:#334155;border-radius:99px;margin:12px 2px 18px;overflow:hidden}
+.progress-bar{height:100%;width:100%;background:#22c55e;transition:.25s}
+.toolbar{display:flex;gap:8px;margin-bottom:14px}
+button{font:inherit;border:0;cursor:pointer}
+.action{flex:1;padding:11px;border-radius:12px;background:#334155;color:#fff;font-weight:700}
+.action:active{transform:scale(.98)}
+.action.danger{background:#7f1d1d}
+.section{background:#1e293b;border-radius:16px;padding:12px;margin-bottom:12px}
+.suit-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-weight:800}
+.suit-count{font-size:12px;color:#94a3b8;font-weight:500}
+.cards{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+.card{min-width:0;aspect-ratio:.72;border-radius:10px;background:#f8fafc;color:#111827;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px #0004;transition:.15s;user-select:none;-webkit-tap-highlight-color:transparent}
+.card.red{color:#dc2626}
+.card.used{opacity:.25;text-decoration:line-through;transform:scale(.94);background:#94a3b8;color:#0f172a}
+.card:active{transform:scale(.9)}
+.legend{font-size:12px;color:#94a3b8;text-align:center;margin-top:8px}
+.history{max-height:180px;overflow:auto;font-size:13px;color:#cbd5e1}
+.history-row{padding:7px 0;border-bottom:1px solid #334155}
+.empty{text-align:center;color:#64748b;padding:12px}
+@media(max-width:360px){.cards{gap:5px}.card{font-size:13px}.app{padding:10px 8px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>🃏 Theo dõi bài Tiến Lên</h1>
+<div class="stats">
+<div class="stat"><div class="num" id="remaining">52</div><div class="label">Lá còn lại</div></div>
+<div class="stat"><div class="num" id="used">0</div><div class="label">Lá đã ra</div></div>
+</div>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+</header>
+
+<div class="toolbar">
+<button class="action" id="undoBtn">↩ Hoàn tác</button>
+<button class="action danger" id="resetBtn">🔄 Ván mới</button>
+</div>
+
+<div id="deck"></div>
+
+<div class="section">
+<div class="suit-title">📜 Lịch sử đánh <span class="suit-count" id="historyCount">0 lá</span></div>
+<div class="history" id="history"><div class="empty">Chưa có lá nào được đánh</div></div>
+</div>
+
+<div class="legend">Chạm vào lá bài để đánh dấu đã xuất hiện. Chạm lần nữa để bỏ đánh dấu.</div>
+</div>
+
+<script>
+const suits=[
+ {name:"♠ BÍCH",symbol:"♠",red:false},
+ {name:"♥ CƠ",symbol:"♥",red:true},
+ {name:"♦ RÔ",symbol:"♦",red:true},
+ {name:"♣ TÉP",symbol:"♣",red:false}
+];
+const ranks=["3","4","5","6","7","8","9","10","J","Q","K","A","2"];
+const deckEl=document.getElementById("deck");
+const remainingEl=document.getElementById("remaining");
+const usedEl=document.getElementById("used");
+const progressBar=document.getElementById("progressBar");
+const historyEl=document.getElementById("history");
+const historyCount=document.getElementById("historyCount");
+const undoBtn=document.getElementById("undoBtn");
+const resetBtn=document.getElementById("resetBtn");
+
+let usedCards=new Set();
+let history=[];
+
+function cardId(suit,rank){return suit.symbol+rank}
+
+function renderDeck(){
+ deckEl.innerHTML="";
+ suits.forEach(suit=>{
+   const section=document.createElement("div");
+   section.className="section";
+   const title=document.createElement("div");
+   title.className="suit-title";
+   title.innerHTML=`<span>${suit.name}</span><span class="suit-count" id="count-${suit.symbol}">0 / 13 đã ra</span>`;
+   const cards=document.createElement("div");
+   cards.className="cards";
+   ranks.forEach(rank=>{
+     const id=cardId(suit,rank);
+     const btn=document.createElement("button");
+     btn.className="card"+(suit.red?" red":"")+(usedCards.has(id)?" used":"");
+     btn.textContent=rank+suit.symbol;
+     btn.setAttribute("aria-label",rank+suit.symbol);
+     btn.onclick=()=>toggleCard(id);
+     cards.appendChild(btn);
+   });
+   section.appendChild(title);section.appendChild(cards);deckEl.appendChild(section);
+   const count=suit.symbol;
+   setTimeout(()=>{
+     const el=document.getElementById("count-"+count);
+     if(el) el.textContent=[...usedCards].filter(x=>x.endsWith(count)).length+" / 13 đã ra";
+   },0);
+ });
+ updateStats();
+}
+
+function toggleCard(id){
+ if(usedCards.has(id)){
+   usedCards.delete(id);
+   history=history.filter(x=>x!==id);
+ }else{
+   usedCards.add(id);
+   history.push(id);
+ }
+ save();
+ renderDeck();
+ renderHistory();
+}
+
+function updateStats(){
+ const used=usedCards.size;
+ const remaining=52-used;
+ remainingEl.textContent=remaining;
+ usedEl.textContent=used;
+ progressBar.style.width=(remaining/52*100)+"%";
+ progressBar.style.background=remaining<=10?"#ef4444":remaining<=20?"#f59e0b":"#22c55e";
+}
+
+function renderHistory(){
+ historyCount.textContent=history.length+" lá";
+ if(!history.length){
+   historyEl.innerHTML='<div class="empty">Chưa có lá nào được đánh</div>';
+   return;
+ }
+ historyEl.innerHTML=[...history].reverse().map((id,i)=>
+   `<div class="history-row">#${history.length-i} — ${id}</div>`
+ ).join("");
+}
+
+undoBtn.onclick=()=>{
+ if(!history.length)return;
+ const id=history.pop();
+ usedCards.delete(id);
+ save();renderDeck();renderHistory();
+};
+
+resetBtn.onclick=()=>{
+ if(confirm("Bạn có chắc muốn xóa toàn bộ dữ liệu ván hiện tại?")){
+   usedCards.clear();history=[];
+   save();renderDeck();renderHistory();
+ }
+};
+
+function save(){
+ localStorage.setItem("tienLenUsed",JSON.stringify([...usedCards]));
+ localStorage.setItem("tienLenHistory",JSON.stringify(history));
+}
+function load(){
+ try{
+   usedCards=new Set(JSON.parse(localStorage.getItem("tienLenUsed")||"[]"));
+   history=JSON.parse(localStorage.getItem("tienLenHistory")||"[]");
+ }catch(e){usedCards=new Set();history=[]}
+}
+load();renderDeck();renderHistory();
+</script>
+</body>
+</html>
